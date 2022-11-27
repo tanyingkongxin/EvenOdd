@@ -39,7 +39,7 @@ then
     echo "$result" >> error_log.txt
     echo "===============================================" >> error_log.txt
 fi
-rm -rf ./test_data/data_read_0
+# rm -rf ./test_data/data_read_0
 echo ====================================
 
 ## test two files failed
@@ -62,7 +62,7 @@ then
 fi
 mv _disk_$index_1 disk_$index_1
 mv _disk_$index_2 disk_$index_2
-rm -rf ./test_data/data_read_21
+# rm -rf ./test_data/data_read_21
 echo ====================================
 # ### case 2:
 let "index_1=prime-2"
@@ -82,7 +82,7 @@ then
 fi
 mv _disk_$index_1 disk_$index_1
 mv _disk_$index_2 disk_$index_2
-rm -rf ./test_data/data_read_22
+# rm -rf ./test_data/data_read_22
 echo ====================================
 # ### case 3:
 let "index_1=prime-1"
@@ -103,7 +103,7 @@ then
 fi
 mv _disk_$index_1 disk_$index_1
 mv _disk_$index_2 disk_$index_2
-rm -rf ./test_data/data_read_23
+# rm -rf ./test_data/data_read_23
 echo ====================================
 
 # ### case 4:
@@ -125,7 +125,7 @@ then
 fi
 mv _disk_$index_1 disk_$index_1
 mv _disk_$index_2 disk_$index_2
-rm -rf ./test_data/data_read_24
+# rm -rf ./test_data/data_read_24
 echo ====================================
 
 # ### case 5:
@@ -148,7 +148,7 @@ then
 fi
 mv _disk_$index_1 disk_$index_1
 mv _disk_$index_2 disk_$index_2
-rm -rf ./test_data/data_read_25
+# rm -rf ./test_data/data_read_25
 echo ====================================
 
 # rm -rf disk*

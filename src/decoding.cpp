@@ -103,19 +103,31 @@ RC readDataColumn(const char *filename, int disk_id, int file_id,
 }
 
 size_t writeDataColumn(char *src, int disk_id, size_t offset, size_t size,
-                       int fd, bool *reset_ptr) {
+                       int fd, bool *reset_ptr, MapManager* mapping) {
+  size_t count = 0;
+#ifdef __USE_MMAP__
+  mapping->do_write(src, size, offset + size * disk_id);
+#else
   if (*reset_ptr) {
     lseek(fd, offset + size * disk_id,
           SEEK_SET); // 频繁 fseek 会带来很大开销吗？
     *reset_ptr = false;
   }
-  return write(fd, src, size);
+  count = write(fd, src, size);
+#endif
+  return count;
 }
 
 /* require: write to file end */
-size_t writeRemain(char *src, size_t offset, size_t size, int fd) {
+size_t writeRemain(char *src, size_t offset, size_t size, int fd, MapManager* mapping) {
+  size_t count = 0;
+#ifdef __USE_MMAP__
+  mapping->do_write(src, size, offset);
+#else
   lseek(fd, offset, SEEK_SET);
-  return write(fd, src, size);
+  count = write(fd, src, size);
+#endif
+  return count;
 }
 
 void readRemain(const char *filename, int disk_id, int file_id, int p,
@@ -176,8 +188,8 @@ void xoreq_diagparity(char *left, char *diag, int left_id, int p,
 void encodeRowDiagonalParity(const char *filename, char *buffer, int p,
                              int file_id, size_t file_size, bool encodeR,
                              char *row_parity, bool encodeD,
-                             char *diagonal_parity, bool isWrite, int output_fd,
-                             size_t write_file_offset) {
+                             char *diagonal_parity, bool isWrite, int output_fd, 
+                             size_t write_file_offset, MapManager* mapping) {
   size_t block_size = file_size / (p - 1);
   bool reset_ptr = false;
   if (encodeR) {
@@ -200,7 +212,7 @@ void encodeRowDiagonalParity(const char *filename, char *buffer, int p,
     }
     if (isWrite) {
       writeDataColumn(buffer, i, write_file_offset, file_size, output_fd,
-                      &reset_ptr);
+                      &reset_ptr, mapping);
     }
   }
 
@@ -220,7 +232,7 @@ void encodeRowDiagonalParity(const char *filename, char *buffer, int p,
 void repairByRowParity(const char *filename, int *failed, char *buffer,
                        char *missed_column, int p, int file_id,
                        size_t file_size, bool isEnocde, char *diagonal_parity,
-                       bool isWrite, int output_fd, size_t write_file_offset) {
+                       bool isWrite, int output_fd, size_t write_file_offset, MapManager* mapping) {
 
   size_t block_size = file_size / (p - 1);
   memset(missed_column, 0, file_size + block_size);
@@ -241,7 +253,7 @@ void repairByRowParity(const char *filename, int *failed, char *buffer,
       }
       if (isWrite) {
         writeDataColumn(buffer, i, write_file_offset, file_size, output_fd,
-                        &reset_ptr);
+                        &reset_ptr, mapping);
       }
     } else {
       reset_ptr = true;
@@ -272,7 +284,7 @@ void repairByDiagonalParity(const char *filename, int *failed, char *buffer,
                             char *missed_column, int p, int file_id,
                             size_t file_size, bool isEnocde, char *row_parity,
                             bool isWrite, int output_fd,
-                            size_t write_file_offset) {
+                            size_t write_file_offset, MapManager* mapping) {
 
   size_t block_size = file_size / (p - 1);
   memset(missed_column, 0, file_size + block_size);
@@ -293,7 +305,7 @@ void repairByDiagonalParity(const char *filename, int *failed, char *buffer,
       }
       if (isWrite) {
         writeDataColumn(buffer, i, write_file_offset, file_size, output_fd,
-                        &reset_ptr);
+                        &reset_ptr, mapping);
       }
     } else {
       reset_ptr = true;
@@ -327,7 +339,7 @@ void repairByRowDiagonalParity(const char *filename, int *failed, char *buffer,
                                char *row_parity, char *diagonal_parity, int p,
                                int file_id, size_t file_size, char **res1,
                                char **res2, bool isWrite, int output_fd,
-                               size_t write_file_offset) {
+                               size_t write_file_offset, MapManager* mapping) {
 
   size_t block_size = file_size / (p - 1);
   char *R = row_parity;
@@ -361,7 +373,7 @@ void repairByRowDiagonalParity(const char *filename, int *failed, char *buffer,
       xoreq_diag(D, buffer, 0, i, p, block_size);
       if (isWrite) {
         writeDataColumn(buffer, i, write_file_offset, file_size, output_fd,
-                        &reset_ptr);
+                        &reset_ptr, mapping);
       }
     }
   }
@@ -393,8 +405,8 @@ void repairByRowDiagonalParity(const char *filename, int *failed, char *buffer,
 }
 
 void decode(int p, int failed_num, int *failed, char *filename, char *save_as,
-            size_t file_size, size_t remain_size, int file_id, int output_fd,
-            size_t offset) {
+            size_t file_size, size_t remain_size, int file_id, int output_fd, 
+            size_t offset, MapManager* mapping) {
 
   size_t block_size = file_size / (p - 1);
   if (failed_num == 0) {
@@ -403,17 +415,18 @@ void decode(int p, int failed_num, int *failed, char *filename, char *save_as,
     char *buffer = new char[file_size];
 
     encodeRowDiagonalParity(filename, buffer, p, file_id, file_size, false,
-                            nullptr, false, nullptr, true, output_fd, offset);
+                            nullptr, false, nullptr, true, output_fd, offset, 
+                            mapping);
 
     if (remain_size > 0) {
       if (remain_size <= file_size) {
         readRemain(filename, p - 1, file_id, p, remain_size, buffer);
-        writeRemain(buffer, offset + file_size * p, remain_size, output_fd);
+        writeRemain(buffer, offset + file_size * p, remain_size, output_fd, mapping);
       } else {
         char *remain_buffer = new char[remain_size];
         readRemain(filename, p - 1, file_id, p, remain_size, remain_buffer);
         writeRemain(remain_buffer, offset + file_size * p, remain_size,
-                    output_fd);
+                    output_fd, mapping);
         delete[] remain_buffer;
       }
     }
@@ -424,17 +437,18 @@ void decode(int p, int failed_num, int *failed, char *filename, char *save_as,
       char *buffer = new char[file_size];
 
       encodeRowDiagonalParity(filename, buffer, p, file_id, file_size, false,
-                              nullptr, false, nullptr, true, output_fd, offset);
+                              nullptr, false, nullptr, true, output_fd, offset, 
+                              mapping);
 
       if (remain_size > 0) {
         if (remain_size <= file_size) {
           readRemain(filename, p - 1, file_id, p, remain_size, buffer);
-          writeRemain(buffer, offset + file_size * p, remain_size, output_fd);
+          writeRemain(buffer, offset + file_size * p, remain_size, output_fd, mapping);
         } else {
           char *remain_buffer = new char[remain_size];
           readRemain(filename, p - 1, file_id, p, remain_size, remain_buffer);
           writeRemain(remain_buffer, offset + file_size * p, remain_size,
-                      output_fd);
+                      output_fd, mapping);
           delete[] remain_buffer;
         }
       }
@@ -446,20 +460,21 @@ void decode(int p, int failed_num, int *failed, char *filename, char *save_as,
       char *missed_column = new char[file_size + block_size];
 
       repairByRowParity(filename, failed, buffer, missed_column, p, file_id,
-                        file_size, false, nullptr, true, output_fd, offset);
+                        file_size, false, nullptr, true, output_fd, offset, 
+                        mapping);
       bool reset_ptr = true;
       writeDataColumn(missed_column, failed[0], offset, file_size, output_fd,
-                      &reset_ptr);
+                      &reset_ptr, mapping);
 
       if (remain_size > 0) {
         if (remain_size <= file_size) {
           readRemain(filename, p, file_id, p, remain_size, buffer);
-          writeRemain(buffer, offset + file_size * p, remain_size, output_fd);
+          writeRemain(buffer, offset + file_size * p, remain_size, output_fd, mapping);
         } else {
           char *remain_buffer = new char[remain_size];
           readRemain(filename, p, file_id, p, remain_size, remain_buffer);
           writeRemain(remain_buffer, offset + file_size * p, remain_size,
-                      output_fd);
+                      output_fd, mapping);
           delete[] remain_buffer;
         }
       }
@@ -475,17 +490,17 @@ void decode(int p, int failed_num, int *failed, char *filename, char *save_as,
 
         encodeRowDiagonalParity(filename, buffer, p, file_id, file_size, false,
                                 nullptr, false, nullptr, true, output_fd,
-                                offset);
+                                offset, mapping);
 
         if (remain_size > 0) {
           if (remain_size <= file_size) {
             readRemain(filename, p - 1, file_id, p, remain_size, buffer);
-            writeRemain(buffer, offset + file_size * p, remain_size, output_fd);
+            writeRemain(buffer, offset + file_size * p, remain_size, output_fd, mapping);
           } else {
             char *remain_buffer = new char[remain_size];
             readRemain(filename, p - 1, file_id, p, remain_size, remain_buffer);
             writeRemain(remain_buffer, offset + file_size * p, remain_size,
-                        output_fd);
+                        output_fd, mapping);
             delete[] remain_buffer;
           }
         }
@@ -499,20 +514,21 @@ void decode(int p, int failed_num, int *failed, char *filename, char *save_as,
         char *missed_column = new char[file_size + block_size];
 
         repairByRowParity(filename, failed, buffer, missed_column, p, file_id,
-                          file_size, false, nullptr, true, output_fd, offset);
+                          file_size, false, nullptr, true, output_fd, offset, 
+                          mapping);
         bool reset_ptr = true;
         writeDataColumn(missed_column, failed[0], offset, file_size, output_fd,
-                        &reset_ptr);
+                        &reset_ptr, mapping);
 
         if (remain_size > 0) {
           if (remain_size <= file_size) {
             readRemain(filename, p, file_id, p, remain_size, buffer);
-            writeRemain(buffer, offset + file_size * p, remain_size, output_fd);
+            writeRemain(buffer, offset + file_size * p, remain_size, output_fd, mapping);
           } else {
             char *remain_buffer = new char[remain_size];
             readRemain(filename, p, file_id, p, remain_size, remain_buffer);
             writeRemain(remain_buffer, offset + file_size * p, remain_size,
-                        output_fd);
+                        output_fd, mapping);
             delete[] remain_buffer;
           }
         }
@@ -529,21 +545,22 @@ void decode(int p, int failed_num, int *failed, char *filename, char *save_as,
 
       repairByDiagonalParity(filename, failed, buffer, missed_column, p,
                              file_id, file_size, false, nullptr, true,
-                             output_fd, offset);
+                             output_fd, offset, 
+                             mapping);
 
       bool reset_ptr = true;
       writeDataColumn(missed_column, failed[0], offset, file_size, output_fd,
-                      &reset_ptr);
+                      &reset_ptr, mapping);
 
       if (remain_size > 0) {
         if (remain_size <= file_size) {
           readRemain(filename, p + 1, file_id, p, remain_size, buffer);
-          writeRemain(buffer, offset + file_size * p, remain_size, output_fd);
+          writeRemain(buffer, offset + file_size * p, remain_size, output_fd, mapping);
         } else {
           char *remain_buffer = new char[remain_size];
           readRemain(filename, p + 1, file_id, p, remain_size, remain_buffer);
           writeRemain(remain_buffer, offset + file_size * p, remain_size,
-                      output_fd);
+                      output_fd, mapping);
           delete[] remain_buffer;
         }
       }
@@ -567,25 +584,25 @@ void decode(int p, int failed_num, int *failed, char *filename, char *save_as,
       char *missed_1, *missed_2;
       repairByRowDiagonalParity(filename, failed, buffer, R, D, p, file_id,
                                 file_size, &missed_1, &missed_2, true,
-                                output_fd, offset);
+                                output_fd, offset, mapping);
 
       // write two data columns to local file
       bool reset_ptr = true;
       writeDataColumn(missed_1, failed[0], offset, file_size, output_fd,
-                      &reset_ptr);
+                      &reset_ptr, mapping);
       reset_ptr = true;
       writeDataColumn(missed_2, failed[1], offset, file_size, output_fd,
-                      &reset_ptr);
+                      &reset_ptr, mapping);
 
       if (remain_size > 0) {
         if (remain_size <= file_size) {
           readRemain(filename, p + 1, file_id, p, remain_size, buffer);
-          writeRemain(buffer, offset + file_size * p, remain_size, output_fd);
+          writeRemain(buffer, offset + file_size * p, remain_size, output_fd, mapping);
         } else {
           char *remain_buffer = new char[remain_size];
           readRemain(filename, p + 1, file_id, p, remain_size, remain_buffer);
           writeRemain(remain_buffer, offset + file_size * p, remain_size,
-                      output_fd);
+                      output_fd, mapping);
           delete[] remain_buffer;
         }
       }
@@ -728,31 +745,41 @@ void read1(char *path, char *save_as) {
 
   file_size -= sizeof(int);
   last_file_size -= sizeof(int);
+  size_t total_size = (file_size * p + remain_size)* (file_per_disk-1) + last_file_size * p + last_remain_size;
   LOG_INFO("file size = %ld, remain size = %ld, file_per_disk = %d, "
-           "last_file_size = %ld, last_remain_size = %ld",
+           "last_file_size = %ld, last_remain_size = %ld, total_size = %ld",
            file_size, remain_size, file_per_disk, last_file_size,
-           last_remain_size);
+           last_remain_size, total_size);
 
   /* start decoding */
-  int output_fd = open(save_as, O_CREAT | O_WRONLY, S_IRWXU);
+  int output_fd = open(save_as, O_CREAT | O_RDWR, S_IRWXU);
   if (output_fd < 0) {
     perror("Error in writing file");
     exit(1);
   }
 
   size_t offset = 0;
+  MapManager m(output_fd, total_size);
+  close(output_fd);
+  if(stat(save_as, &st) == 0){
+    printf("file [%s] size = %ld\n", save_as, st.st_size);
+  }
+  
+
   for (int file_id = 0; file_id < file_per_disk; file_id++) {
-    
     lseek(output_fd, offset, SEEK_SET);
     if (file_id != file_per_disk - 1) {
       decode(p, failed_num, failed, filename, save_as, file_size, remain_size,
-             file_id, output_fd, offset);
+             file_id, output_fd, offset, &m);
     } else {
       decode(p, failed_num, failed, filename, save_as, last_file_size,
-             last_remain_size, file_id, output_fd, offset);
+             last_remain_size, file_id, output_fd, offset, &m);
     }
 
     offset += file_size * p + remain_size;
   }
+  // fsync(output_fd);
+#ifndef __USE_MMAP__
   close(output_fd);
+#endif
 }

@@ -8,17 +8,69 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <unistd.h>
+
 #ifndef PATH_MAX_LEN
 #define PATH_MAX_LEN 512
 #endif
+
+#define __USE_MMAP__ 1
+
+class MapManager{
+public: 
+    /* 为写文件而设计，假定文件初始为空，
+    * 因此在函数内部进行了 truncate 
+    */
+#ifdef __USE_MMAP__
+    MapManager(int fd_, size_t size_):fd(fd_), size(size_), mapping(nullptr){
+        printf("using mmap in decoding, size = %ld\n", size);
+        if(ftruncate(fd, size) == -1){
+            perror("ftruncate failed");
+            exit(-1);
+        }
+        // lseek(fd, -1, SEEK_END);
+        // char x = 'o';
+        // write(fd, &x, 1);
+        
+        mapping = (char*)mmap(NULL, size, PROT_WRITE, MAP_SHARED, fd, 0);
+        if(mapping == MAP_FAILED){
+            perror("mmap failed");
+            exit(-1);
+        }
+    }
+
+    void do_write(char* src, size_t s, size_t offset){
+        memcpy(mapping + offset, src, s);
+    }
+
+    ~MapManager(){
+        if(mapping != nullptr){
+            msync(mapping, size, MS_SYNC);
+            munmap(mapping, size);
+        }
+    }
+#else
+    MapManager(int fd_, size_t size_):fd(fd_), size(size_), mapping(nullptr){}
+
+    void do_write(char* src, size_t s, size_t offset){}
+
+    ~MapManager(){}
+#endif
+
+  char* mapping;
+  int fd;
+  size_t size;
+};
 
 RC readDataColumn(const char *filename, int disk_id, int file_id,
                   size_t file_size, char *result);
 
 size_t writeDataColumn(char *src, int disk_id, size_t offset, size_t size,
-                       int fd, bool *reset_ptr);
+                       int fd, bool *reset_ptr, MapManager* mapping);
 
-size_t writeRemain(char *src, size_t offset, size_t size, int fd);
+size_t writeRemain(char *src, size_t offset, size_t size, int fd, MapManager* mapping);
 
 void readRemain(const char *filename, int disk_id, int file_id, int p,
                 size_t remain_size, char *result);
@@ -47,30 +99,30 @@ void encodeRowDiagonalParity(const char *filename, char *buffer, int p,
                              bool encodeD = false,
                              char *diagonal_parity = nullptr,
                              bool isWrite = false, int output_fd = -1,
-                             size_t write_file_offset = 0);
+                             size_t write_file_offset = 0, MapManager* mapping = nullptr);
 
 void repairByRowParity(const char *filename, int *failed, char *buffer,
                        char *missed_column, int p, int file_id,
                        size_t file_size, bool isEnocde = false,
                        char *diagonal_parity = nullptr, bool isWrite = false,
-                       int output_fd = -1, size_t write_file_offset = 0);
+                       int output_fd = -1, size_t write_file_offset = 0, MapManager* mapping = nullptr);
 
 void repairByDiagonalParity(const char *filename, int *failed, char *buffer,
                             char *missed_column, int p, int file_id,
                             size_t file_size, bool isEnocde = false,
                             char *row_parity = nullptr, bool isWrite = false,
-                            int output_fd = -1, size_t write_file_offset = 0);
+                            int output_fd = -1, size_t write_file_offset = 0, MapManager* mapping = nullptr);
 
 void repairByRowDiagonalParity(const char *filename, int *failed, char *buffer,
                                char *row_parity, char *diagonal_parity, int p,
                                int file_id, size_t file_size, char **res1,
                                char **res2, bool isWrite = false,
                                int output_fd = -1,
-                               size_t write_file_offset = 0);
+                               size_t write_file_offset = 0, MapManager* mapping = nullptr);
 
 void decode(int p, int failed_num, int *failed, char *filename, char *save_as,
-            size_t file_size, size_t remain_size, int file_id, int output_fd,
-            size_t write_file_offset);
+            size_t file_size, size_t remain_size, int file_id, int output_fd, 
+            size_t write_file_offset, MapManager* mapping);
 
 void repairMixed(const char *filename, int *failed, char *buffer,
                  char *missed_column, int p, int file_id, size_t file_size);
