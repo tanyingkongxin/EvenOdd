@@ -1,12 +1,14 @@
 import os
 import argparse
 import time
-import matplotlib.pyplot as plt
 
 parser = argparse.ArgumentParser()
 parser.add_argument("file_size", type=int)
 parser.add_argument("primer", type=int)
 args = parser.parse_args()
+
+data_dir = '/mnt/vdb/wxr'
+# ../wxr_script/data
 
 def print_run_time(func):
     def wrapper(*args, **kw):
@@ -16,8 +18,8 @@ def print_run_time(func):
     return wrapper
 
 @print_run_time
-def generate_data(size:int) -> bool:
-    path = f"data/data_{size}GB"
+def generate_data(size:int, dir="data") -> bool:
+    path = f"{dir}/data_{size}GB" 
     if os.path.exists(path):
         print(f"file exist: {path}")
         return False
@@ -30,13 +32,13 @@ def generate_data(size:int) -> bool:
 def do_write(buf_size: int, file_size: int, p: int):
     os.system('echo -n "| write "')
     local_time = time.time()
-    os.system(f"./time_check write ../wxr_script/data/data_{file_size}GB {p} {buf_size}")
+    os.system(f"./time_check write {data_dir}/data_{file_size}GB {p} {buf_size}")
     return time.time() - local_time
 
 
 def read_normal(file_size:int) -> float:
     os.system('echo -n "| read normal "')
-    path = f"../wxr_script/data/data_{file_size}GB"
+    path = f"{data_dir}/data_{file_size}GB"
     dst_path = f"./test_data/data_{file_size}GB_read_0"
     local_time = time.time()
     os.system(f"./evenodd read {path} {dst_path}")
@@ -45,7 +47,7 @@ def read_normal(file_size:int) -> float:
 # miss p-2
 def read_miss_data_one(file_size:int, p:int) -> float:
     os.system('echo -n "| read miss one data "')
-    path = f"../wxr_script/data/data_{file_size}GB"
+    path = f"{data_dir}/data_{file_size}GB"
     dst_path = f"./test_data/data_{file_size}GB_read_11"
     os.rename(f'disk_{p-2}', f'_disk_{p-2}')
     local_time = time.time()
@@ -57,7 +59,7 @@ def read_miss_data_one(file_size:int, p:int) -> float:
 
 def read_miss_rd(file_size:int, p:int) -> float:
     os.system('echo -n "| read miss row and diagonal "')
-    path = f"../wxr_script/data/data_{file_size}GB"
+    path = f".{data_dir}/data_{file_size}GB"
     dst_path = f"./test_data/data_{file_size}GB_read_21"
     os.rename(f'disk_{p}', f'_disk_{p}')
     os.rename(f'disk_{p+1}', f'_disk_{p+1}')
@@ -70,7 +72,7 @@ def read_miss_rd(file_size:int, p:int) -> float:
 
 def read_miss_data_r(file_size:int, p:int) -> float:
     os.system('echo -n "| read miss data and row "')
-    path = f"../wxr_script/data/data_{file_size}GB"
+    path = f"{data_dir}/data_{file_size}GB"
     dst_path = f"./test_data/data_{file_size}GB_read_22"
     os.rename(f'disk_{p-2}', f'_disk_{p-2}')
     os.rename(f'disk_{p}', f'_disk_{p}')
@@ -83,7 +85,7 @@ def read_miss_data_r(file_size:int, p:int) -> float:
 
 def read_miss_data_d(file_size:int, p:int) -> float:
     os.system('echo -n "| read miss data and diagonal "')
-    path = f"../wxr_script/data/data_{file_size}GB"
+    path = f"{data_dir}/data_{file_size}GB"
     dst_path = f"./test_data/data_{file_size}GB_read_23"
     os.rename(f'disk_{p-3}', f'_disk_{p-3}')
     os.rename(f'disk_{p+1}', f'_disk_{p+1}')
@@ -97,7 +99,7 @@ def read_miss_data_d(file_size:int, p:int) -> float:
 def read_miss_data_two(file_size:int, p:int) -> float:
     os.system('echo -n "| read miss two data "')
 
-    path = f"../wxr_script/data/data_{file_size}GB"
+    path = f"{data_dir}/data_{file_size}GB"
     dst_path = f"./test_data/data_{file_size}GB_read_24"
     os.rename(f'disk_{p-1}', f'_disk_{p-1}')
     os.rename(f'disk_{p-3}', f'_disk_{p-3}')
@@ -113,7 +115,8 @@ if __name__ == '__main__':
     # 测试不同 buffer_size 对于 read 性能的影响
 
     os.system("./start.sh")
-    generate_data(args.file_size)
+
+    generate_data(args.file_size, data_dir)
     file_size = args.file_size
     p = args.primer 
     os.chdir("../build")
