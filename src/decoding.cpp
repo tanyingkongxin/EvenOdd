@@ -8,8 +8,11 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+static State state;
+
 RC readBlock(const char *filename, int disk_id, int file_id, int block_id,
              size_t block_size, char *result) {
+  state.read_start();
   char file_path[PATH_MAX_LEN];
   sprintf(file_path, "disk_%d/%s.%d", disk_id, filename, file_id);
   int fd = open(file_path, O_RDONLY);
@@ -20,6 +23,7 @@ RC readBlock(const char *filename, int disk_id, int file_id, int block_id,
   lseek(fd, sizeof(int) + block_id * block_size, SEEK_SET);
   read(fd, result, block_size);
   close(fd);
+  state.read_end();
   return RC::SUCCESS;
 }
 
@@ -89,6 +93,7 @@ void repairMixed(const char *filename, int *failed, char *buffer,
 
 RC readDataColumn(const char *filename, int disk_id, int file_id,
                   size_t file_size, char *result) {
+  state.read_start();
   char file_path[PATH_MAX_LEN];
   sprintf(file_path, "disk_%d/%s.%d", disk_id, filename, file_id);
   int fd = open(file_path, O_RDONLY);
@@ -99,11 +104,13 @@ RC readDataColumn(const char *filename, int disk_id, int file_id,
   lseek(fd, sizeof(int), SEEK_SET);
   read(fd, result, file_size);
   close(fd);
+  state.read_end();
   return RC::SUCCESS;
 }
 
 size_t writeDataColumn(char *src, int disk_id, size_t offset, size_t size,
                        int fd, bool *reset_ptr, MapManager* mapping) {
+  state.write_start();
   size_t count = 0;
 #ifdef __USE_MMAP__
   mapping->do_write(src, size, offset + size * disk_id);
@@ -115,11 +122,13 @@ size_t writeDataColumn(char *src, int disk_id, size_t offset, size_t size,
   }
   count = write(fd, src, size);
 #endif
+  state.write_end();
   return count;
 }
 
 /* require: write to file end */
 size_t writeRemain(char *src, size_t offset, size_t size, int fd, MapManager* mapping) {
+  state.write_start();
   size_t count = 0;
 #ifdef __USE_MMAP__
   mapping->do_write(src, size, offset);
@@ -127,11 +136,13 @@ size_t writeRemain(char *src, size_t offset, size_t size, int fd, MapManager* ma
   lseek(fd, offset, SEEK_SET);
   count = write(fd, src, size);
 #endif
+  state.write_end();
   return count;
 }
 
 void readRemain(const char *filename, int disk_id, int file_id, int p,
                 size_t remain_size, char *result) {
+  state.read_start();
   int input;
   char file_path[PATH_MAX_LEN];
   if (disk_id == p - 1) {
@@ -147,9 +158,11 @@ void readRemain(const char *filename, int disk_id, int file_id, int p,
     LOG_ERROR("invalidly reading of remain block");
   }
   close(input);
+  state.read_end();
 }
 
 void block_xor(char *left, char *right, char *result, size_t block_size) {
+  state.start();
 #pragma omp parallel for num_threads(2)
   for (int i = 0; i < block_size / 8; i++) {
     ((size_t *)(result))[i] = ((size_t *)(left))[i] ^ ((size_t *)(right))[i];
@@ -158,6 +171,7 @@ void block_xor(char *left, char *right, char *result, size_t block_size) {
   for (int idx = block_size - last; idx < block_size; idx++) {
     result[idx] = left[idx] ^ right[idx];
   }
+  state.end();
 }
 
 void block_xoreq(char *left, char *right, size_t block_size) {
@@ -624,6 +638,8 @@ void decode(int p, int failed_num, int *failed, char *filename, char *save_as,
  * should be a file named "tmp_file", which is the same as "testfile".
  */
 void read1(char *path, char *save_as) {
+  state.start();
+
   struct stat st = {0};
   size_t file_size = 0;
   size_t last_file_size = 0;
@@ -657,6 +673,7 @@ void read1(char *path, char *save_as) {
       } else {
         // file exist but p is unknown
         if (p == 0) {
+          state.read_start();
           int fd = open(file_path, O_RDONLY);
           if (fd < 0) {
             LOG_ERROR("error, can't open file");
@@ -664,6 +681,7 @@ void read1(char *path, char *save_as) {
           }
           read(fd, &p, sizeof(int));
           close(fd);
+          state.read_end();
         }
 
         if (disk_id == p - 1) {
@@ -760,10 +778,12 @@ void read1(char *path, char *save_as) {
 
   size_t offset = 0;
   MapManager m(output_fd, total_size);
-  close(output_fd);
+#ifdef __USE_MMAP__
   if(stat(save_as, &st) == 0){
-    printf("file [%s] size = %ld\n", save_as, st.st_size);
+    LOG_DEBUG("file [%s] size = %ld\n", save_as, st.st_size);
   }
+  close(output_fd);
+#endif
   
 
   for (int file_id = 0; file_id < file_per_disk; file_id++) {
@@ -782,4 +802,7 @@ void read1(char *path, char *save_as) {
 #ifndef __USE_MMAP__
   close(output_fd);
 #endif
+
+  state.end();
+  state.print();
 }

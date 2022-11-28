@@ -25,7 +25,7 @@ public:
     */
 #ifdef __USE_MMAP__
     MapManager(int fd_, size_t size_):fd(fd_), size(size_), mapping(nullptr){
-        printf("using mmap in decoding, size = %ld\n", size);
+        LOG_INFO("using mmap in decoding, size = %ld\n", size);
         if(ftruncate(fd, size) == -1){
             perror("ftruncate failed");
             exit(-1);

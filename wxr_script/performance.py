@@ -7,8 +7,8 @@ parser.add_argument("file_size", type=int)
 parser.add_argument("primer", type=int)
 args = parser.parse_args()
 
-data_dir = '/mnt/vdb/wxr'
-# ../wxr_script/data
+# data_dir = '/mnt/vdb/wxr'
+data_dir = '../wxr_script/data'
 
 def print_run_time(func):
     def wrapper(*args, **kw):
@@ -120,11 +120,9 @@ if __name__ == '__main__':
     file_size = args.file_size
     p = args.primer 
     os.chdir("../build")
-    buf_size_list = [pow(2, i+1) for i in range(10)] # from 1MB to 1GB
-    time_list = [0] * 7
 
-    
-    buf_size_list = [16] #[1, 16, 256]
+    # buf_size_list = [pow(2, i+1) for i in range(10)] # from 1MB to 1GB
+    buf_size_list = [128] #[1, 16, 256]
     time_list = [[0]*7 for _ in range(len(buf_size_list))]
     for i, buf_size in enumerate(buf_size_list):
         t = time_list[i]
@@ -132,22 +130,28 @@ if __name__ == '__main__':
         print(f"|buf={buf_size}, fs={file_size}, p={p} | total_cost | xor | io | write | read |")
         print("| -- | -- | -- | -- | -- | -- |")
 
-        t[0] = do_write(buf_size, file_size, 13)
+        t[0] = do_write(buf_size, file_size, p)
 
         t[1] = read_normal(file_size)
+        os.remove(f"./test_data/data_{file_size}GB_read_0")
 
-        # t[2] = read_miss_data_one(file_size, p)
+        t[2] = read_miss_data_one(file_size, p)
+        os.remove(f"./test_data/data_{file_size}GB_read_11")
 
-        # t[3] = read_miss_rd(file_size, p)
+        t[3] = read_miss_rd(file_size, p)
+        os.remove(f"./test_data/data_{file_size}GB_read_21")
 
-        # t[4] = read_miss_data_r(file_size, p)
+        t[4] = read_miss_data_r(file_size, p)
+        os.remove(f"./test_data/data_{file_size}GB_read_22")
 
-        # t[5] = read_miss_data_d(file_size, p)
+        t[5] = read_miss_data_d(file_size, p)
+        os.remove(f"./test_data/data_{file_size}GB_read_23")
 
-        # t[6] = read_miss_data_two(file_size, p)
+        t[6] = read_miss_data_two(file_size, p)
+        os.remove(f"./test_data/data_{file_size}GB_read_24")
 
         print()
-        # os.system("rm -rf disk_*")
-        # os.system("rm -r test_data/*")
+        os.system("rm -rf disk_*")
+        os.system("rm -r test_data/*")
     
     
