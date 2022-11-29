@@ -798,9 +798,12 @@ void read1(char *path, char *save_as) {
 
     offset += file_size * p + remain_size;
   }
-  // fsync(output_fd);
+
 #ifndef __USE_MMAP__
+  fsync(output_fd);
   close(output_fd);
+#else
+  m.m_sync();
 #endif
 
   state.end();

@@ -22,8 +22,8 @@ index_1=0
 index_2=0
 prime=$2
 
-src="/mnt/vdb/wxr/data_${1}GB"
-#src="../wxr_script/data/data_${1}GB"
+# src="/mnt/vdb/wxr/data_${1}GB"
+src="../wxr_script/data/data_${1}GB"
 
 #测试write模块时间
 ./time_check write $src $prime

@@ -152,6 +152,5 @@ if __name__ == '__main__':
 
         print()
         os.system("rm -rf disk_*")
-        os.system("rm -r test_data/*")
     
     

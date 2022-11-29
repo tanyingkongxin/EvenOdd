@@ -25,7 +25,7 @@ public:
     */
 #ifdef __USE_MMAP__
     MapManager(int fd_, size_t size_):fd(fd_), size(size_), mapping(nullptr){
-        LOG_INFO("using mmap in decoding, size = %ld\n", size);
+        LOG_DEBUG("using mmap in decoding, size = %ld\n", size);
         if(ftruncate(fd, size) == -1){
             perror("ftruncate failed");
             exit(-1);
@@ -45,9 +45,12 @@ public:
         memcpy(mapping + offset, src, s);
     }
 
+    void m_sync(){
+        msync(mapping, size, MS_SYNC);
+    }
+
     ~MapManager(){
         if(mapping != nullptr){
-            msync(mapping, size, MS_SYNC);
             munmap(mapping, size);
         }
     }

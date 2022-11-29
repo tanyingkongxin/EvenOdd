@@ -41,7 +41,7 @@ int main(int argc, char **argv) {
       RC error_code = encode(file_path, p);
       gettimeofday(&end, NULL);
       time = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1e6;
-      printf("write数据消耗时间: %f s\n ", time);
+      // printf("write数据消耗时间: %f s\n ", time);
 
       // average_time += time;
     }
@@ -64,7 +64,7 @@ int main(int argc, char **argv) {
       read1(argv[2], argv[3]);
       gettimeofday(&end, NULL);
       time = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1e6;
-      printf("read数据消耗时间: %f s\n ", time);
+      // printf("read数据消耗时间: %f s\n ", time);
 
       // average_time += time;
     }
